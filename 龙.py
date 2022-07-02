@@ -1,17 +1,14 @@
 import re
-import yaml
 import itertools
 from pathlib import Path
 from typing import List, Dict, Union, Any
 from concurrent.futures import ThreadPoolExecutor
 
+import yaml
 from rimo_storage.cache import disk_cache
 
 
-替换 = {
-    '＃！': '#!',
-    '＃': '#',
-}
+替换 = {}
 
 
 def 前处理(s):
@@ -21,7 +18,7 @@ def 前处理(s):
             yield i
             i = s.find(p, i+1)
     ss = []
-    l = {*re.findall(r'(?:\$.+?\$)|(?:\[.+?\])|(?:\@.+?\!)', s)}
+    l = {*re.findall(r'(?:\$.+?\$)|(?:\[.+?\])|(?:\@.+?\!)|(?:\#\!)|(?:\#\w* )', s)}
     切点 = []
     for i in l:
         for t in findall(i, s):
@@ -101,8 +98,10 @@ def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str):
         if 源.suffix in ['.yaml', '.yml']:
             with open(源, encoding='utf-8') as f:
                 txt = f.read()
-                txt = re.sub(r':\d* +', ': ', txt)   # p社的yaml格式诡异
-                txt = re.sub(r'(?<!(\: ))"(?!( *(\n|$)))', '\\"', txt)
+                # p社的yaml格式诡异，随便搞1搞
+                txt = re.sub(r':\d* +', ': ', txt)   # 删除冒号后的数字
+                txt = re.sub(r'''#[^"]*(?=(\n|$))''', '', txt)   # 删除注释
+                txt = re.sub(r'(?<!(\: ))"(?!( *(\n|$)))', '\\"', txt)  # 为内部的双引号加上转义符
                 x = yaml.safe_load(txt)
                 x = 超翻译(x, 源语言=源语言, 目标语言=目标语言)
                 print(f'{源.name} -> {目标.name}，翻译好了！')

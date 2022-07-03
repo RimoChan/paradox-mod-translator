@@ -5,6 +5,7 @@ from typing import List, Dict, Union, Any
 from concurrent.futures import ThreadPoolExecutor
 
 import yaml
+from tqdm import tqdm
 from rimo_storage.cache import disk_cache
 
 
@@ -18,7 +19,7 @@ def 前处理(s):
             yield i
             i = s.find(p, i+1)
     ss = []
-    l = {*re.findall(r'(?:\$.+?\$)|(?:\[.+?\])|(?:\@.+?\!)|(?:\#\!)|(?:\#\w* )', s)}
+    l = {*re.findall(r'(?:\$.+?\$)|(?:\[.+?\])|(?:\@.+?\!)|(?:\#\!)|(?:\#\w* )|(?:£.+?£)|(?:\n)|(?:§.)', s)}
     切点 = []
     for i in l:
         for t in findall(i, s):
@@ -71,7 +72,9 @@ def 翻译(s: str, 源语言: str, 目标语言: str) -> str:
 
 A = Dict[str, Union[str, 'A']]
 def 超翻译(q: A, 源语言: str, 目标语言: str) -> A:
-    def 换(item) -> A:
+    tq = tqdm(total=len(q), ncols=60)
+    def 换(item) -> Union[str, A]:
+        tq.update(1)
         k, v = item
         if isinstance(v, str):
             return 翻译(v, 源语言=源语言, 目标语言=目标语言)
@@ -80,32 +83,46 @@ def 超翻译(q: A, 源语言: str, 目标语言: str) -> A:
         else:
             return v
     新q = {}
-    for (k, v), 新v in zip(q.items(), ThreadPoolExecutor(max_workers=4).map(换, q.items())):
+    for (k, v), 新v in zip(q.items(), ThreadPoolExecutor(max_workers=8).map(换, q.items())):
         if k == f'l_{源语言}':
             k = f'l_{目标语言}'
         新q[k] = 新v
     return 新q
 
 
-def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str):
+def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str, 强制对齐):
     if 源.is_dir():
         目标.mkdir(exist_ok=True)
         for x in 源.iterdir():
             name = x.name
             name = name.replace(f'_l_{源语言}.', f'_l_{目标语言}.')
-            _龙(x, 目标 / name, 源语言, 目标语言)
+            _龙(x, 目标 / name, 源语言, 目标语言, 强制对齐)
     elif 源.is_file():
         if 源.suffix in ['.yaml', '.yml']:
             with open(源, encoding='utf-8') as f:
                 txt = f.read()
+                if txt[0] == '\ufeff':
+                    txt = txt[1:]
                 # p社的yaml格式诡异，随便搞1搞
                 txt = re.sub(r':\d* +', ': ', txt)   # 删除冒号后的数字
+                txt = re.sub(r':\d+"', ': "', txt)   # 删除冒号后的数字
                 txt = re.sub(r'''#[^"]*(?=(\n|$))''', '', txt)   # 删除注释
-                txt = re.sub(r'(?<!(\: ))"(?!( *(\n|$)))', '\\"', txt)  # 为内部的双引号加上转义符
+                txt = re.sub(r'(?<!(\: ))(?<!(\\))"(?!( *(\n|$)))', '\\"', txt)  # 为内部的双引号加上转义符
+                if 强制对齐:
+                    txt = txt.replace('\r', '\n')
+                    lines = txt.split('\n')
+                    new_lines = []
+                    for line in lines:
+                        line = line.strip()
+                        if line == 'l_simp_chinese:':
+                            new_lines.append(line)
+                        else:
+                            new_lines.append('  '+line)
+                    txt = '\n'.join(new_lines)
                 x = yaml.safe_load(txt)
                 x = 超翻译(x, 源语言=源语言, 目标语言=目标语言)
                 print(f'{源.name} -> {目标.name}，翻译好了！')
-                
+
             # 默认格式游戏不识别，必须改成双引号
             dict_keys = set()
             def _a(d: dict):
@@ -125,6 +142,6 @@ def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str):
                 yaml.dump(x, f, allow_unicode=True, width=100000, default_flow_style=False, explicit_start=True)
 
 
-def 龙(本地化文件夹路径: str, 源语言: str = 'english', 目标语言: str = 'simp_chinese'):
+def 龙(本地化文件夹路径: str, 源语言: str = 'english', 目标语言: str = 'simp_chinese', 强制对齐=True):
     本地化文件夹路径 = Path(本地化文件夹路径)
-    _龙(本地化文件夹路径/源语言, 本地化文件夹路径/目标语言, 源语言, 目标语言)
+    _龙(本地化文件夹路径/源语言, 本地化文件夹路径/目标语言, 源语言, 目标语言, 强制对齐)

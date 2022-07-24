@@ -114,7 +114,7 @@ def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str, 强制对�
                     new_lines = []
                     for line in lines:
                         line = line.strip()
-                        if line == 'l_simp_chinese:':
+                        if line == f'l_{源语言}:':
                             new_lines.append(line)
                         else:
                             new_lines.append('  '+line)

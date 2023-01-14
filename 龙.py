@@ -1,7 +1,7 @@
 import re
 import itertools
 from pathlib import Path
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Union, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 import yaml
@@ -19,7 +19,17 @@ def 前处理(s):
             yield i
             i = s.find(p, i+1)
     ss = []
-    l = {*re.findall(r'(?:\$.+?\$)|(?:\[.+?\])|(?:\@.+?\!)|(?:\#\!)|(?:\#\w* )|(?:£.+?£)|(?:\n)|(?:§.)', s)}
+    切点定义 = [
+        r'(?:\$.+?\$)',
+        r'(?:\[.+?\])',
+        r'(?:\@.+?\!)',
+        r'(?:\#\!)',
+        r'(?:\#(?:\w|;)* )',
+        r'(?:£.+?£)',
+        r'(?:\n)',
+        r'(?:§.)',
+    ]
+    l = {*re.findall('|'.join(切点定义), s)}
     切点 = []
     for i in l:
         for t in findall(i, s):
@@ -71,8 +81,8 @@ def 翻译(s: str, 源语言: str, 目标语言: str) -> str:
 
 
 A = Dict[str, Union[str, 'A']]
-def 超翻译(q: A, 源语言: str, 目标语言: str) -> A:
-    tq = tqdm(total=len(q), ncols=60)
+def 超翻译(q: A, 源语言: str, 目标语言: str, 文件名: Optional[str] = None) -> A:
+    tq = tqdm(total=len(q), ncols=70, desc=文件名)
     def 换(item) -> Union[str, A]:
         tq.update(1)
         k, v = item
@@ -100,6 +110,7 @@ def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str, 强制对�
     elif 源.is_file():
         if 源.suffix in ['.yaml', '.yml']:
             with open(源, encoding='utf-8') as f:
+                print(f'开始处理 {源.name} 。')
                 txt = f.read()
                 if txt[0] == '\ufeff':
                     txt = txt[1:]
@@ -120,7 +131,7 @@ def _龙(源: Path, 目标: Path, 源语言: str, 目标语言: str, 强制对�
                             new_lines.append('  '+line)
                     txt = '\n'.join(new_lines)
                 x = yaml.safe_load(txt)
-                x = 超翻译(x, 源语言=源语言, 目标语言=目标语言)
+                x = 超翻译(x, 源语言=源语言, 目标语言=目标语言, 文件名=源.name)
                 print(f'{源.name} -> {目标.name}，翻译好了！')
 
             # 默认格式游戏不识别，必须改成双引号
